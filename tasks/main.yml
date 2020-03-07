@@ -1,0 +1,118 @@
+---
+# tasks file for update-resolvconf
+- name: Update Resolv.conf for RedHat OS family
+  when:
+    - hostvars[inventory_hostname]['ansible_os_family'] in ['RedHat']
+  block:
+    - name: Verify that the resolv.conf file exists
+      find:
+        paths: /etc/
+        pattern: 'resolv.conf'
+        use_regex: yes
+        file_type: file
+      register: resolv_conf
+    
+    - name: Set Search domain fact
+      set_fact:
+        search_domain: "{{ hostvars[inventory_hostname]['ansible_nodename'].split('.')[1:4] | join('.') | default(idm_realm | lower) }}"
+    
+    - name: Check if the search domain is already present in resolv.conf
+      command: grep {{ search_domain }} {{ resolv_conf.files[0].path }}
+      failed_when:
+        - search_domain_inresolvconf.rc > 1 
+        - not search_domain_inresolvconf.stderr == "" 
+      register: search_domain_inresolvconf
+    
+    - name: Prepend the nameserver to the existing nameserver statement
+      replace:
+        path: "{{ resolv_conf.files[0].path }}"
+        regexp: 'search '
+        replace: "search {{ search_domain }} " 
+        backup: yes
+      when:
+        - resolv_conf is defined
+        - resolv_conf.files is defined
+        - resolv_conf.files[0] is defined
+        - resolv_conf.files[0].path is defined
+        - not resolv_conf.files[0].path == "" 
+        - search_domain_inresolvconf is defined
+        - search_domain_inresolvconf.rc <= 1 
+        - search_domain_inresolvconf.stderr == "" 
+        - not search_domain in search_domain_inresolvconf.stdout
+    
+    - name: Add nameserver line for the provided DNS server IP
+      lineinfile:
+        path: "{{ resolv_conf.files[0].path }}"
+        insertafter: "^search"
+        line: "nameserver {{ idm_ip }}"
+        state: present
+        backup: yes
+      when:
+        - resolv_conf is defined
+        - resolv_conf.files is defined
+        - resolv_conf.files[0] is defined
+        - resolv_conf.files[0].path is defined
+        - not resolv_conf.files[0].path == "" 
+
+- name: Update Resolv.conf for Debian OS family
+  when:
+    - hostvars[inventory_hostname]['ansible_os_family'] in ['Debian']
+  block:
+    - name: Verify that the resolv.conf file exists
+      find:
+        paths: /etc/dhcp/
+        pattern: 'dhclient.conf'
+        use_regex: yes
+        file_type: file
+      register: resolv_conf
+
+    - name: Set Search domain fact
+      set_fact:
+        search_domain: "{{ hostvars[inventory_hostname]['ansible_nodename'].split('.')[1:4] | join('.') | default(idm_realm | lower) }}"
+    
+    - name: Print Output of resolv.conf file\
+      debug:
+        var: resolv_conf
+
+    - name: Check if the search domain is already present in resolv.conf
+      command: grep {{ search_domain }} {{ resolv_conf.files[0].path }}
+      failed_when:
+        - search_domain_inresolvconf.rc > 1 
+        - not search_domain_inresolvconf.stderr == "" 
+      register: search_domain_inresolvconf
+
+    - name: Prepend the nameserver to the existing nameserver statement
+      lineinfile:
+        path: "{{ resolv_conf.files[0].path }}"
+        regexp: '^#supersede '
+        line: "supersede domain-name {{ search_domain }}; " 
+        state: present
+        backup: yes
+      when:
+        - resolv_conf is defined
+        - resolv_conf.files is defined
+        - resolv_conf.files[0] is defined
+        - resolv_conf.files[0].path is defined
+        - not resolv_conf.files[0].path == "" 
+        - search_domain_inresolvconf is defined
+        - search_domain_inresolvconf.rc <= 1 
+        - search_domain_inresolvconf.stderr == "" 
+        - not search_domain in search_domain_inresolvconf.stdout
+
+    - name: Append the DNS server IP to the existing nameserver statement
+      lineinfile:
+        path: "{{ resolv_conf.files[0].path }}"
+        regexp: '^#prepend '
+        line: "prepend domain-name-servers 127.0.0.1 {{ search_domain }}; " 
+        state: present
+        backup: yes
+      when:
+        - resolv_conf is defined
+        - resolv_conf.files is defined
+        - resolv_conf.files[0] is defined
+        - resolv_conf.files[0].path is defined
+        - not resolv_conf.files[0].path == "" 
+        - search_domain_inresolvconf is defined
+        - search_domain_inresolvconf.rc <= 1 
+        - search_domain_inresolvconf.stderr == "" 
+        - not search_domain in search_domain_inresolvconf.stdout
