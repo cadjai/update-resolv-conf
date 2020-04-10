@@ -1,8 +1,39 @@
 ---
 # tasks file for update-resolvconf
+- name: Permanently Update Resolv.conf for RedHat OS family through NetworkManager
+  when:
+    - hostvars[inventory_hostname]['ansible_os_family'] in ['RedHat']
+    - "{{ add_dns_config_to_networkmanager | default('false') | bool }}"
+    - search_domains is defined and search_domains != ""
+  block:
+    - name: Configure NameServer via NetworkManager
+      lineinfile:
+        path: "/etc/NetworkManager/NetworkManager.conf"
+        insertafter: '[main]'
+        backup: yes
+        regexp: "^dns="
+        line: dns=default
+        state: present
+      when: 
+        - "{{ add_dns_config_to_networkmanager | default('false') | bool }}"
+      register: netmgr_conf_updated
+        
+    - name: Add Nameserver and Search domain config persistently to Resolv.conf through NetworkManager
+      template:
+        src: network-mgr-dns-conf.conf.j2 
+        dest: "/etc/NetworkManager/conf.d/{{ dns_conf_file | default('dns.conf') }}"
+        backup: yes
+        group: root
+        owner: root
+      when: 
+        - "{{ add_dns_config_to_networkmanager | default('false') | bool }}"
+      register: netmgr_dns_conf_added
+
+
 - name: Update Resolv.conf for RedHat OS family
   when:
     - hostvars[inventory_hostname]['ansible_os_family'] in ['RedHat']
+    - not add_dns_config_to_networkmanager is defined or not add_dns_config_to_networkmanager | bool
   block:
     - name: Verify that the resolv.conf file exists
       find:

@@ -1,2 +1,5 @@
 ---
 # defaults file for update-resolvconf
+search_domains: 
+nameservers: "8.8.8.8,8.8.4.4"
+add_dns_config_to_networkmanager: false
