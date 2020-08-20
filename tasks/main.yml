@@ -85,6 +85,15 @@
         - resolv_conf.files[0].path is defined
         - not resolv_conf.files[0].path == "" 
 
+    - name: Disable Resolv.conf update by NetworkManager
+      template:
+        src: 90-dns-none.conf.j2         
+        dest: "/etc/NetworkManager/conf.d/90-dns-none.conf"
+        backup: yes
+        group: root
+        owner: root
+      register: netmgr_dns_none_conf_added
+
 - name: Update Resolv.conf for Debian OS family
   when:
     - hostvars[inventory_hostname]['ansible_os_family'] in ['Debian']
